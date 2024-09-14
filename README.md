@@ -68,3 +68,33 @@ kubectl port-forward -n netobserv service/grafana 3000:3000
 Then, open your browser and go to `http://localhost:3000`. You should be able to add the Loki datasource with `http://loki:3100` as the URL.
 
 ![](img/grafana-example.png)
+
+## Expalanation of the default logs
+By default, you'll get these logs for each network flow:
+- `"DstK8S_HostName"`: Hostname of the destination Kubernetes node.
+- `"DstK8S_OwnerType"`: Type of Kubernetes object (e.g., Deployment) that owns the destination.
+- `"AgentIP"`: IP address of the agent collecting the logs.
+- `"SrcAddr"`: Source IP address.
+- `"Bytes"`: Number of bytes transmitted.
+- `"DstAddr"`: Destination IP address.
+- `"DstPort"`: Destination TCP/UDP port.
+- `"DstK8S_Type"`: Type of destination Kubernetes object (e.g., Pod).
+- `"SrcK8S_Type"`: Type of source Kubernetes object (e.g., Service).
+- `"DstMac"`: MAC address of the destination.
+- `"TimeFlowStartMs"`: Timestamp when the flow started in milliseconds since epoch.
+- `"DnsErrno"`: DNS error number.
+- `"IfDirections"`: Array indicating interface directions.
+- `"SrcPort"`: Source TCP/UDP port.
+- `"TimeReceived"`: Timestamp when the log was received in seconds since epoch.
+- `"Etype"`: Ethernet type.
+- `"DstK8S_Name"`: Name of the destination Kubernetes object.
+- `"TimeFlowEndMs"`: Timestamp when the flow ended in milliseconds since epoch.
+- `"Interfaces"`: Array of interface names.
+- `"SrcMac"`: MAC address of the source.
+- `"Dscp"`: Differentiated Services Code Point value.
+- `"Proto"`: Protocol number (e.g., 6 for TCP).
+- `"SrcK8S_OwnerType"`: Type of Kubernetes object (e.g., Service) that owns the source.
+- `"Packets"`: Number of packets transmitted.
+- `"SrcK8S_Name"`: Name of the source Kubernetes object.
+- `"Flags"`: TCP Flags.
+- `"DstK8S_HostIP"`: IP address of the destination Kubernetes node.
