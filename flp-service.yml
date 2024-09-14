@@ -1,0 +1,175 @@
+# Example deployment for manual testing with flp
+# It requires loki to be installed
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: netobserv-ebpf-agent
+  namespace: netobserv
+  labels:
+    k8s-app: netobserv-ebpf-agent
+spec:
+  selector:
+    matchLabels:
+      k8s-app: netobserv-ebpf-agent
+  template:
+    metadata:
+      labels:
+        k8s-app: netobserv-ebpf-agent
+    spec:
+      serviceAccountName: netobserv
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+      - name: netobserv-ebpf-agent
+        image: quay.io/netobserv/netobserv-ebpf-agent:main
+        imagePullPolicy: Always
+        securityContext:
+          privileged: true
+          runAsUser: 0
+        env:
+          - name: TARGET_HOST
+            value: "flp"
+          - name: TARGET_PORT
+            value: "9999"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flp
+  namespace: netobserv
+  labels:
+    k8s-app: flp
+spec:
+  ports:
+    - port: 9999
+      protocol: TCP
+      targetPort: 9999
+      name: flp
+  selector:
+    k8s-app: flp
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flp
+  namespace: netobserv
+  labels:
+    k8s-app: flp
+spec:
+  selector:
+    matchLabels:
+      k8s-app: flp
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        k8s-app: flp
+    spec:
+      serviceAccountName: netobserv
+      containers:
+        - name: packet-counter
+          image: quay.io/netobserv/flowlogs-pipeline:main
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 9999
+              hostPort: 9999
+          args:
+            - --config=/etc/flp/config.yaml
+          volumeMounts:
+            - mountPath: /etc/flp
+              name: config-volume
+      volumes:
+        - name: config-volume
+          configMap:
+            name: flp-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flp-config
+  namespace: netobserv
+data:
+  config.yaml: |
+    log-level: debug
+    pipeline:
+      - name: ingest
+      - name: enrich
+        follows: ingest
+      - name: loki
+        follows: enrich
+    parameters:
+      - name: ingest
+        ingest:
+          type: grpc
+          grpc:
+            port: 9999
+      - name: enrich
+        transform:
+          type: network
+          network:
+            rules:
+              - type: add_kubernetes
+                kubernetes:
+                  input: SrcAddr
+                  output: SrcK8S
+              - type: add_kubernetes
+                kubernetes:
+                  input: DstAddr
+                  output: DstK8S
+      - name: loki
+        write:
+          type: loki
+          loki:
+            staticLabels:
+              app: netobserv-flowcollector
+            labels:
+              - "SrcK8S_Namespace"
+              - "SrcK8S_OwnerName"
+              - "DstK8S_Namespace"
+              - "DstK8S_OwnerName"
+            url: http://loki.netobserv.svc:3100
+            timestampLabel: TimeFlowEndMs
+            timestampScale: 1ms
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: netobserv
+  namespace: netobserv
+rules:
+  - apiGroups:
+      - apps
+    resources:
+      - daemonsets
+      - deployments
+      - replicasets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+      - namespaces
+      - services
+      - nodes
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: netobserv
+  namespace: netobserv
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: netobserv
+subjects:
+  - kind: ServiceAccount
+    name: netobserv
+    namespace: netobserv
